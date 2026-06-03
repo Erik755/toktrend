@@ -36,12 +36,24 @@ object TikTokApiService {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    private fun redactSensitiveInfo(text: String?): String? {
+        if (text == null) return null
+        return text
+            .replace(Regex("\"access_token\"\\s*:\\s*\"[^\"]+\""), "\"access_token\":\"[REDACTED]\"")
+            .replace(Regex("\"refresh_token\"\\s*:\\s*\"[^\"]+\""), "\"refresh_token\":\"[REDACTED]\"")
+            .replace(Regex("Bearer\\s+[a-zA-Z0-9._-]+"), "Bearer [REDACTED]")
+            .replace(Regex("client_secret=[a-zA-Z0-9._-]+"), "client_secret=[REDACTED]")
+            .replace(Regex("code=[a-zA-Z0-9._-]+"), "code=[REDACTED]")
+    }
+
     fun log(type: String, service: String, message: String, detail: String? = null) {
         val formatter = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
         val time = formatter.format(Date())
-        val entry = ApiLogEntry(timestamp = time, type = type, service = service, message = message, detail = detail)
+        val cleanMessage = redactSensitiveInfo(message) ?: ""
+        val cleanDetail = redactSensitiveInfo(detail)
+        val entry = ApiLogEntry(timestamp = time, type = type, service = service, message = cleanMessage, detail = cleanDetail)
         _logs.value = listOf(entry) + _logs.value.take(49) // Keep last 50
-        Log.d(TAG, "[$service] [$type] $message")
+        Log.d(TAG, "[$service] [$type] $cleanMessage")
     }
 
     fun clearLogs() {
@@ -137,7 +149,8 @@ object TikTokApiService {
             })
         }
 
-        log("INFO", "TikTok API v2", "Enviando Meta-data de video con token Bearer $accessToken", requestBodyJson.toString(2))
+        val maskedToken = if (accessToken.length > 8) "${accessToken.take(4)}…${accessToken.takeLast(4)}" else "***"
+        log("INFO", "TikTok API v2", "Enviando Meta-data de video con token Bearer $maskedToken", requestBodyJson.toString(2))
 
         val request = Request.Builder()
             .url(url)

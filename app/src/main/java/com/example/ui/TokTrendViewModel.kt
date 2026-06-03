@@ -113,9 +113,9 @@ class TokTrendViewModel(application: Application) : AndroidViewModel(application
             try {
                 delay(1200)
                 // 1. Automatic Agent Selection based on category
-                val bestAgent = when (selectedCategory.lowercase()) {
-                    "tech & gadgets" -> "tiktok_publisher_agent"
-                    "lifestyle & hacks" -> "social_media_ninja"
+                val bestAgent = when {
+                    selectedCategory.contains("tech", ignoreCase = true) -> "tiktok_publisher_agent"
+                    selectedCategory.contains("lifestyle", ignoreCase = true) -> "social_media_ninja"
                     else -> "operations_manager"
                 }
                 updateSelectedAgentId(bestAgent)
@@ -397,6 +397,7 @@ class TokTrendViewModel(application: Application) : AndroidViewModel(application
         daemonJob = viewModelScope.launch {
             TikTokApiService.log("INFO", "Daemon", "Servidor de Publicaciones Automáticas Iniciado.")
             while (isDaemonRunning) {
+                try {
                 val nowTime = System.currentTimeMillis()
 
                 // --- Autopilot Periodic Cycle Check ---
@@ -447,11 +448,17 @@ class TokTrendViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
                 delay(8000) // Poll database queue every 8 seconds for real-time reactivity
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e // Let coroutine cancellation propagate normally
+                } catch (e: Exception) {
+                    TikTokApiService.log("ERROR", "Daemon", "Error en ciclo del daemon: ${e.message}")
+                    delay(8000) // Back off and retry
+                }
             }
         }
     }
 
-    suspend fun runAutopilotInstantFlow(nowTime: Long) {
+    private suspend fun runAutopilotInstantFlow(nowTime: Long) {
         TikTokApiService.log("INFO", "Autopilot", "⏱️ Iniciando ciclo automatizado (Modo Piloto Automático IA)...")
         
         // 1. Refresh trends
@@ -513,6 +520,12 @@ class TokTrendViewModel(application: Application) : AndroidViewModel(application
         daemonJob?.cancel()
         daemonJob = null
         TikTokApiService.log("INFO", "Daemon", "Servidor de Publicaciones Automáticas Detenido.")
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopSchedulingDaemon()
+        stopVideoSimulation()
     }
 
     private fun findNextScheduledPostTime(): String {

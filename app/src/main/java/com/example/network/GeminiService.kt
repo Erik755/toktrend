@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 object GeminiService {
     private const val TAG = "GeminiService"
-    private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+    private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -192,8 +192,8 @@ object GeminiService {
      * Fallback standard high-quality trends if key is missing or request fails.
      */
     private fun getLocalBackupTrends(category: String): List<TikTokTrend> {
-        return when (category.lowercase()) {
-            "tech & gadgets" -> listOf(
+        return when {
+            category.contains("tech", ignoreCase = true) -> listOf(
                 TikTokTrend(
                     hashtag = "#DeskSetup",
                     title = "Transformación Extrema de Escritorio con IA",
@@ -222,7 +222,7 @@ object GeminiService {
                     musicRecommendation = "Lofi Hip-Hop moderno y relajado."
                 )
             )
-            "lifestyle & hacks" -> listOf(
+            category.contains("lifestyle", ignoreCase = true) -> listOf(
                 TikTokTrend(
                     hashtag = "#SundayReset",
                     title = "Reinicio de Domingo Brutalista",
@@ -240,6 +240,86 @@ object GeminiService {
                     category = "Lifestyle & Hacks",
                     visualStyle = "Tomas macro picando ingredientes a alta velocidad con cortes perfectamente sincronizados.",
                     musicRecommendation = "Pop acústico alegre de ritmo medio."
+                )
+            )
+            category.contains("music", ignoreCase = true) -> listOf(
+                TikTokTrend(
+                    hashtag = "#ViralHook",
+                    title = "El Hook de 3 Segundos que Engancha",
+                    description = "Cómo abrir un video musical con un gancho tan potente que el algoritmo lo impulsa automáticamente.",
+                    score = 94,
+                    category = "Music",
+                    visualStyle = "Primer plano del micrófono con bokeh de fondo y luces de estudio.",
+                    musicRecommendation = "Trap beat minimalista con 808 prominente."
+                ),
+                TikTokTrend(
+                    hashtag = "#AIMusic",
+                    title = "Produje Esta Canción con IA en 10 Min",
+                    description = "Tutorial rápido usando herramientas de IA para componer, mezclar y masterizar un tema completo.",
+                    score = 91,
+                    category = "Music",
+                    visualStyle = "Pantalla dividida DAW + cara del creador reaccionando.",
+                    musicRecommendation = "Lofi producido por IA con sintetizadores suaves."
+                )
+            )
+            category.contains("comedy", ignoreCase = true) -> listOf(
+                TikTokTrend(
+                    hashtag = "#POVTecnico",
+                    title = "POV: Tu Jefe Descubre Que Usas IA",
+                    description = "Sketch cómico corto sobre revelar en la oficina que toda tu productividad viene de herramientas de IA.",
+                    score = 93,
+                    category = "Comedy",
+                    visualStyle = "Cámara fija tipo documental, expresiones exageradas.",
+                    musicRecommendation = "Música de suspenso cómica tipo game show."
+                ),
+                TikTokTrend(
+                    hashtag = "#ExpectativaVsRealidad",
+                    title = "Expectativa vs Realidad: Trabajar Desde Casa",
+                    description = "Comparativa exagerada entre la imagen idealizada del trabajo remoto y la cruda realidad cotidiana.",
+                    score = 89,
+                    category = "Comedy",
+                    visualStyle = "Transición brusca con zoom y texto en pantalla grande.",
+                    musicRecommendation = "Jingle cómico de 8 bits retro."
+                )
+            )
+            category.contains("business", ignoreCase = true) -> listOf(
+                TikTokTrend(
+                    hashtag = "#SideHustle",
+                    title = "Gané \$500 Esta Semana con IA y 2 Horas",
+                    description = "Demostración real de un flujo de trabajo automatizado con IA que genera ingresos pasivos básicos.",
+                    score = 96,
+                    category = "Business",
+                    visualStyle = "Captura de pantalla de ingresos + cara del creador emocionado.",
+                    musicRecommendation = "Hip-hop motivacional ascendente."
+                ),
+                TikTokTrend(
+                    hashtag = "#AutomationStack",
+                    title = "Mi Stack de Automatización que Reemplazó a 3 Empleados",
+                    description = "Walkthrough de 5 herramientas que juntas automatizan tareas repetitivas de negocio completamente.",
+                    score = 92,
+                    category = "Business",
+                    visualStyle = "Diagrama animado de flujo con pantallas de apps reales.",
+                    musicRecommendation = "Tech house progresivo sin letra."
+                )
+            )
+            category.contains("gaming", ignoreCase = true) -> listOf(
+                TikTokTrend(
+                    hashtag = "#NPCChallenge",
+                    title = "Actué Como NPC Durante 1 Hora en Warzone",
+                    description = "Experimento social en juego online comportándose exactamente como un NPC e ignorando a otros jugadores.",
+                    score = 95,
+                    category = "Gaming",
+                    visualStyle = "POV primera persona con movimientos robóticos y subtítulos grandes.",
+                    musicRecommendation = "Música de videojuego 16-bit acelerada."
+                ),
+                TikTokTrend(
+                    hashtag = "#SetupReview",
+                    title = "El Setup Gamer Más Increíble por \$300",
+                    description = "Tour de un battlestation ultra-optimizado construido con presupuesto ajustado y piezas de segunda mano.",
+                    score = 88,
+                    category = "Gaming",
+                    visualStyle = "Toma cenital del escritorio con iluminación RGB, cortes rápidos.",
+                    musicRecommendation = "Dubstep energético con drops fuertes."
                 )
             )
             else -> listOf(

@@ -71,7 +71,7 @@ class TokTrendRepository(
         TikTokApiService.log("INFO", "Analyzer", "Actualizando tendencias para la categoría: $category...")
         val trends = GeminiService.generateTrends(category, searchSeed)
         if (trends.isNotEmpty()) {
-            trendDao.clearAllTrends()
+            trendDao.clearAllTrends()  // Only clear after confirming we have new data
             trendDao.insertTrends(trends)
             TikTokApiService.log("SUCCESS", "Analyzer", "Se cargaron ${trends.size} tendencias de TikTok exitosamente.")
         } else {
@@ -129,7 +129,11 @@ class TokTrendRepository(
     }
 
     suspend fun savePost(post: VideoPost) {
-        postDao.insertPost(post)
+        if (post.id > 0) {
+            postDao.updatePost(post)
+        } else {
+            postDao.insertPost(post)
+        }
         TikTokApiService.log("INFO", "Scheduler", "Ajustes de borrador guardados para: ${post.title}")
     }
 

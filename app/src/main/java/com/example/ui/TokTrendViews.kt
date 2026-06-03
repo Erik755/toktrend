@@ -237,7 +237,7 @@ fun TokTrendBottomBar(
 @Composable
 fun TrendsScreen(viewModel: TokTrendViewModel, connectedAccount: TikTokAccount?) {
     val trendsList by viewModel.trends.collectAsState()
-    val categories = listOf("Tech & Gadgets", "Lifestyle & Hacks", "General")
+    val categories = listOf("Tech & Gadgets", "Lifestyle & Hacks", "Music", "Comedy", "Business", "Gaming", "General")
     
     Column(
         modifier = Modifier
@@ -537,7 +537,7 @@ fun TrendsScreen(viewModel: TokTrendViewModel, connectedAccount: TikTokAccount?)
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "Utilizando Gemini 3.5 Flash en tiempo real",
+                    text = "Utilizando Gemini 1.5 Flash en tiempo real",
                     style = MaterialTheme.typography.bodySmall,
                     color = TikTokMuted
                 )

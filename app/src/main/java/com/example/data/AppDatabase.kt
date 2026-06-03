@@ -26,7 +26,7 @@ abstract class TokTrendDatabase : RoomDatabase() {
                     TokTrendDatabase::class.java,
                     "tok_trend_database"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigrationFrom(1) // Safe: only wipes DB when upgrading from v1
                 .build()
                 INSTANCE = instance
                 instance
