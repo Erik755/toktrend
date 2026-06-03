@@ -1,0 +1,79 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect project type
+        id: detect
+        run: |
+          if [ -f "android/gradlew" ]; then
+            echo "type=capacitor" >> $GITHUB_OUTPUT
+          elif [ -f "gradlew" ]; then
+            echo "type=android" >> $GITHUB_OUTPUT
+          elif [ -f "package.json" ]; then
+            echo "type=web" >> $GITHUB_OUTPUT
+          else
+            echo "type=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.type == 'web' || steps.detect.outputs.type == 'capacitor'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install web dependencies
+        if: steps.detect.outputs.type == 'web' || steps.detect.outputs.type == 'capacitor'
+        run: npm install
+
+      - name: Build web app
+        if: steps.detect.outputs.type == 'web' || steps.detect.outputs.type == 'capacitor'
+        run: npm run build --if-present
+
+      - name: Install Capacitor Android
+        if: steps.detect.outputs.type == 'web'
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init TokTrend com.toktrend.app --web-dir=dist || npx cap init TokTrend com.toktrend.app --web-dir=build || true
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK - Capacitor/Web
+        if: steps.detect.outputs.type == 'web' || steps.detect.outputs.type == 'capacitor'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Build APK - Native Android
+        if: steps.detect.outputs.type == 'android'
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: toktrend-debug-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/*.apk
