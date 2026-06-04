@@ -928,9 +928,10 @@ function Get-TikTokAccessToken {
 
     $envMap = Read-DotEnv -Path (Join-Path $Root ".env")
     $token = [string]$envMap["TIKTOK_ACCESS_TOKEN"]
-    if (Test-ConfiguredValue -Value $token) { return $token }
+    $allowManualToken = ([string]$envMap["TIKTOK_ALLOW_MANUAL_TOKEN"]).Trim().ToLowerInvariant()
+    if ((Test-ConfiguredValue -Value $token) -and @("1", "true", "yes", "si") -contains $allowManualToken) { return $token }
 
-    throw "Falta token de TikTok. Pulsa Conectar con TikTok para autorizar OAuth o pega TIKTOK_ACCESS_TOKEN valido en .env."
+    throw "Falta autorizacion OAuth valida de TikTok. Pulsa Conectar con TikTok e inicia sesion para autorizar user.info.basic y video.publish."
 }
 
 function Save-Base64Video {
