@@ -1,5 +1,5 @@
 const storageKey = "toktrend-state-v2";
-const appVersion = "2026.06.04-9";
+const appVersion = "2026.06.04-10";
 
 const trends = [
   {

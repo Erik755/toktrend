@@ -351,22 +351,28 @@ function Get-TikTokConnectionStatus {
     $token = Get-TikTokSavedToken
     $connected = $false
     $expiresAt = ""
+    $authMode = "none"
+    $requiresOAuth = $true
 
-    if (Test-ConfiguredValue -Value $manualToken) {
-        $connected = $true
-        $expiresAt = "manual-token"
-    } elseif ($token -and (Test-ConfiguredValue -Value ([string]$token.access_token))) {
+    if ($token -and (Test-ConfiguredValue -Value ([string]$token.access_token))) {
+        $authMode = "oauth"
         $expiresAt = [string]$token.expires_at
         if (-not $expiresAt) {
             $connected = $true
         } else {
             try { $connected = ([DateTime]::Parse($expiresAt) -gt (Get-Date).AddMinutes(5)) } catch { $connected = $true }
         }
+        $requiresOAuth = -not $connected
+    } elseif (Test-ConfiguredValue -Value $manualToken) {
+        $authMode = "manual"
+        $expiresAt = "manual-token"
     }
 
     return @{
         configured = $config.configured
         connected = $connected
+        authMode = $authMode
+        requiresOAuth = $requiresOAuth
         redirectUri = $config.redirectUri
         scopes = $config.scopes
         tokenExpiresAt = $expiresAt
@@ -900,10 +906,6 @@ function Invoke-AIVideoPlan {
 }
 
 function Get-TikTokAccessToken {
-    $envMap = Read-DotEnv -Path (Join-Path $Root ".env")
-    $token = [string]$envMap["TIKTOK_ACCESS_TOKEN"]
-    if (Test-ConfiguredValue -Value $token) { return $token }
-
     $savedToken = Get-TikTokSavedToken
     if ($savedToken -and (Test-ConfiguredValue -Value ([string]$savedToken.access_token))) {
         $expiresAt = [string]$savedToken.expires_at
@@ -923,6 +925,10 @@ function Get-TikTokAccessToken {
             }
         }
     }
+
+    $envMap = Read-DotEnv -Path (Join-Path $Root ".env")
+    $token = [string]$envMap["TIKTOK_ACCESS_TOKEN"]
+    if (Test-ConfiguredValue -Value $token) { return $token }
 
     throw "Falta token de TikTok. Pulsa Conectar con TikTok para autorizar OAuth o pega TIKTOK_ACCESS_TOKEN valido en .env."
 }
