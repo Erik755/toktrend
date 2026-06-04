@@ -94,6 +94,11 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
+.simple-header,
+.simple-panel {
+  width: 100%;
+}
+
 .brand,
 .simple-brand {
   display: flex;
@@ -469,8 +474,9 @@ textarea:focus {
 
 @media (max-width: 860px) {
   .simple-app {
-    width: min(100% - 20px, 720px);
-    padding-top: 10px;
+    width: 100%;
+    max-width: 720px;
+    padding: 10px 10px 44px;
   }
 
   .simple-header,
