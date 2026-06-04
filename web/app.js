@@ -1,5 +1,5 @@
 const storageKey = "toktrend-state-v2";
-const appVersion = "2026.06.04-8";
+const appVersion = "2026.06.04-9";
 
 const trends = [
   {
@@ -113,12 +113,24 @@ function $(selector) {
   return document.querySelector(selector);
 }
 
+function localBackendBase() {
+  return "http://127.0.0.1:8789";
+}
+
+function isLocalApp() {
+  return ["127.0.0.1", "localhost", ""].includes(location.hostname);
+}
+
+function isRemoteHostedApp() {
+  return location.protocol !== "file:" && !isLocalApp();
+}
+
 function apiBase() {
   if (window.TOKTREND_API_BASE) return String(window.TOKTREND_API_BASE).replace(/\/$/, "");
   // GitHub Pages usa el backend local para OAuth y publicacion sin exponer secretos.
-  if (location.protocol === "file:") return "http://127.0.0.1:8789";
-  if (["127.0.0.1", "localhost", ""].includes(location.hostname)) return "";
-  return "http://127.0.0.1:8789";
+  if (location.protocol === "file:") return localBackendBase();
+  if (isLocalApp()) return "";
+  return localBackendBase();
 }
 
 function hasBackend() {
@@ -157,6 +169,15 @@ async function postJson(path, body) {
 }
 
 async function checkAiHealth() {
+  if (isRemoteHostedApp()) {
+    state.aiOnline = false;
+    state.aiProvider = "local";
+    state.connected = false;
+    saveState();
+    renderStatus();
+    return;
+  }
+
   try {
     const response = await fetch(`${apiBase()}/api/health`);
     const data = await response.json();
@@ -187,6 +208,12 @@ async function backendAvailable() {
 }
 
 async function connectTikTok() {
+  if (isRemoteHostedApp()) {
+    showToast("Abriendo TokTrend local para conectar TikTok...", "info");
+    location.href = `${localBackendBase()}/api/tiktok/oauth/start?return_to=${encodeURIComponent(`${localBackendBase()}/`)}`;
+    return;
+  }
+
   showToast("Revisando conexion local con TikTok...", "info");
   if (!(await backendAvailable())) {
     showToast("No se encontro el servicio local de TokTrend para conectar TikTok. La creacion y descarga siguen disponibles.", "warning");
@@ -613,6 +640,12 @@ async function publishToTikTok() {
     showToast("Primero crea un video.", "warning");
     return;
   }
+  if (isRemoteHostedApp()) {
+    showToast("Para publicar en TikTok se abrira TokTrend local, donde el backend tiene tus credenciales.", "info");
+    location.href = `${localBackendBase()}/`;
+    return;
+  }
+
   await checkAiHealth();
   if (!state.connected) {
     showToast("Conecta TikTok antes de publicar. El video ya puede descargarse localmente.", "warning");
