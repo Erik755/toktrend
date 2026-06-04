@@ -1,5 +1,5 @@
 const storageKey = "toktrend-state-v2";
-const appVersion = "2026.06.04-2";
+const appVersion = "2026.06.04-3";
 
 const trends = [
   {
@@ -184,6 +184,7 @@ async function checkAiHealth() {
 }
 
 async function backendAvailable() {
+  if (!hasBackend()) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2200);
   try {
@@ -197,6 +198,10 @@ async function backendAvailable() {
 }
 
 async function connectTikTok() {
+  if (!hasBackend()) {
+    showToast("En GitHub Pages puedes crear y descargar videos. Para conectar TikTok usa la app local con el backend de TokTrend abierto.", "info");
+    return;
+  }
   showToast("Revisando conexion local con TikTok...", "info");
   if (!(await backendAvailable())) {
     showToast("No se encontro el servicio local de TokTrend para conectar TikTok. La creacion y descarga siguen disponibles.", "warning");
