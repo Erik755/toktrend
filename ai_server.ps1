@@ -30,14 +30,22 @@ function Test-ConfiguredValue {
     return $true
 }
 
+function Set-CorsHeaders {
+    param($Context)
+
+    $Context.Response.Headers["Access-Control-Allow-Origin"] = "*"
+    $Context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
+    $Context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    $Context.Response.Headers["Access-Control-Allow-Private-Network"] = "true"
+    $Context.Response.Headers["Access-Control-Max-Age"] = "600"
+}
+
 function Send-Json {
     param($Context, [int]$StatusCode, $Object)
 
     $Context.Response.StatusCode = $StatusCode
     $Context.Response.ContentType = "application/json; charset=utf-8"
-    $Context.Response.Headers["Access-Control-Allow-Origin"] = "*"
-    $Context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    $Context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type"
+    Set-CorsHeaders -Context $Context
 
     $json = $Object | ConvertTo-Json -Depth 40
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
@@ -61,6 +69,7 @@ function Send-File {
 
     $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
     $Context.Response.ContentType = if ($mime.ContainsKey($ext)) { $mime[$ext] } else { "application/octet-stream" }
+    Set-CorsHeaders -Context $Context
     $bytes = [System.IO.File]::ReadAllBytes($Path)
     $Context.Response.ContentLength64 = $bytes.Length
     $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
@@ -79,7 +88,7 @@ function Send-Html {
 
     $Context.Response.StatusCode = $StatusCode
     $Context.Response.ContentType = "text/html; charset=utf-8"
-    $Context.Response.Headers["Access-Control-Allow-Origin"] = "*"
+    Set-CorsHeaders -Context $Context
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($Html)
     $Context.Response.ContentLength64 = $bytes.Length
     $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
@@ -90,6 +99,7 @@ function Send-Redirect {
     param($Context, [string]$Location)
 
     $Context.Response.StatusCode = 302
+    Set-CorsHeaders -Context $Context
     $Context.Response.Headers["Location"] = $Location
     $Context.Response.Close()
 }
@@ -194,12 +204,28 @@ function Get-PkceChallenge {
     return ConvertTo-Base64Url -Bytes $hash
 }
 
+function Get-SafeReturnUrl {
+    param([string]$ReturnUrl)
+
+    if ([string]::IsNullOrWhiteSpace($ReturnUrl)) { return "/" }
+    try {
+        $uri = [Uri]$ReturnUrl
+        $allowedHosts = @("erik755.github.io", "127.0.0.1", "localhost")
+        if ($allowedHosts -notcontains $uri.Host.ToLowerInvariant()) { return "/" }
+        if ($uri.Host.ToLowerInvariant() -eq "erik755.github.io" -and -not $uri.AbsolutePath.StartsWith("/toktrend")) { return "/" }
+        return $uri.AbsoluteUri
+    } catch {
+        return "/"
+    }
+}
+
 function Save-TikTokOAuthState {
-    param([string]$State, [string]$CodeVerifier)
+    param([string]$State, [string]$CodeVerifier, [string]$ReturnUrl = "/")
 
     @{
         state = $State
         codeVerifier = $CodeVerifier
+        returnUrl = (Get-SafeReturnUrl -ReturnUrl $ReturnUrl)
         createdAt = (Get-Date).ToString("o")
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Get-TikTokOAuthStatePath) -Encoding UTF8
 }
@@ -297,13 +323,15 @@ function Invoke-TikTokRefreshToken {
 }
 
 function New-TikTokAuthorizationUrl {
+    param([string]$ReturnUrl = "/")
+
     $config = Get-TikTokClientConfig
     if (-not $config.configured) { throw "Faltan TIKTOK_CLIENT_KEY y TIKTOK_CLIENT_SECRET en .env." }
 
     $state = [Guid]::NewGuid().ToString("N")
     $codeVerifier = New-PkceVerifier
     $codeChallenge = Get-PkceChallenge -Verifier $codeVerifier
-    Save-TikTokOAuthState -State $state -CodeVerifier $codeVerifier
+    Save-TikTokOAuthState -State $state -CodeVerifier $codeVerifier -ReturnUrl $ReturnUrl
 
     $query = "client_key=$([System.Net.WebUtility]::UrlEncode($config.clientKey))" +
         "&response_type=code" +
@@ -934,7 +962,7 @@ function Invoke-TikTokDirectPost {
         }
 
         try {
-            $creator = Invoke-RestMethod -Method Post -Uri "https://open.tiktokapis.com/v2/post/publish/creator_info/query/" -Headers $headers
+            $creator = Invoke-RestMethod -Method Post -Uri "https://open.tiktokapis.com/v2/post/publish/creator_info/query/" -Headers $headers -Body "{}"
         } catch {
             Write-RemoteErrorLog -Label "ERROR TIKTOK creator_info" -ErrorRecord $_
             throw
@@ -991,14 +1019,57 @@ function Invoke-TikTokDirectPost {
             throw
         }
 
+        $status = $null
+        try {
+            Start-Sleep -Seconds 4
+            $status = Invoke-TikTokPublishStatus -PublishId $publishId
+        } catch {
+            $status = @{
+                ok = $false
+                error = $_.Exception.Message
+            }
+        }
+
         return @{
             publishId = $publishId
             privacy = $privacy
             size = $size
+            creator = @{
+                username = [string]$creator.data.creator_username
+                nickname = [string]$creator.data.creator_nickname
+            }
+            status = $status
             message = "Video enviado a TikTok. Si tu app no esta auditada, TikTok puede restringirlo a privado."
         }
     } finally {
         Remove-Item -LiteralPath $videoPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-TikTokPublishStatus {
+    param([string]$PublishId)
+
+    if (-not (Test-ConfiguredValue -Value $PublishId)) { throw "Falta publish_id para consultar estado." }
+
+    $accessToken = Get-TikTokAccessToken
+    $headers = @{
+        "Authorization" = "Bearer $accessToken"
+        "Content-Type" = "application/json; charset=UTF-8"
+    }
+    $body = @{
+        publish_id = $PublishId
+    } | ConvertTo-Json -Depth 5
+
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri "https://open.tiktokapis.com/v2/post/publish/status/fetch/" -Headers $headers -Body $body
+        return @{
+            ok = (($response.error.code -eq "ok") -or (-not $response.error.code))
+            data = $response.data
+            error = $response.error
+        }
+    } catch {
+        Write-RemoteErrorLog -Label "ERROR TIKTOK publish_status" -ErrorRecord $_
+        throw
     }
 }
 
@@ -1010,7 +1081,7 @@ Write-Host "TokTrend AI server listening at $Prefix"
 while ($listener.IsListening) {
     $ctx = $listener.GetContext()
     try {
-        $ctx.Response.Headers["Access-Control-Allow-Origin"] = "*"
+        Set-CorsHeaders -Context $ctx
         $path = $ctx.Request.Url.AbsolutePath
 
         if ($ctx.Request.HttpMethod -eq "OPTIONS") {
@@ -1056,7 +1127,8 @@ while ($listener.IsListening) {
         }
 
         if ($path -eq "/api/tiktok/oauth/start") {
-            $authUrl = New-TikTokAuthorizationUrl
+            $returnTo = [string]$ctx.Request.QueryString["return_to"]
+            $authUrl = New-TikTokAuthorizationUrl -ReturnUrl $returnTo
             Send-Redirect -Context $ctx -Location $authUrl
             continue
         }
@@ -1079,12 +1151,21 @@ while ($listener.IsListening) {
 
             $token = Invoke-TikTokExchangeCode -Code $code -CodeVerifier $codeVerifier
             $expiresAt = [System.Net.WebUtility]::HtmlEncode([string]$token.expires_at)
-            Send-Html -Context $ctx -StatusCode 200 -Html "<!doctype html><meta charset='utf-8'><title>TikTok conectado</title><body style='font-family:Arial;background:#111;color:#fff;padding:32px'><h1>TikTok conectado</h1><p>El token se guardo localmente. Expira: $expiresAt</p><p>Volviendo a TokTrend...</p><script>setTimeout(function(){ location.href='/' }, 1200)</script></body>"
+            $returnUrl = [System.Net.WebUtility]::HtmlEncode((Get-SafeReturnUrl -ReturnUrl ([string]$savedState.returnUrl)))
+            Send-Html -Context $ctx -StatusCode 200 -Html "<!doctype html><meta charset='utf-8'><title>TikTok conectado</title><body style='font-family:Arial;background:#111;color:#fff;padding:32px'><h1>TikTok conectado</h1><p>El token se guardo localmente. Expira: $expiresAt</p><p>Volviendo a TokTrend...</p><script>setTimeout(function(){ location.href='$returnUrl' }, 1200)</script></body>"
             continue
         }
 
         if ($path -eq "/api/tiktok/status") {
             Send-Json -Context $ctx -StatusCode 200 -Object @{ ok = $true; tiktok = (Get-TikTokConnectionStatus) }
+            continue
+        }
+
+        if ($path -eq "/api/tiktok/publish/status" -and $ctx.Request.HttpMethod -eq "POST") {
+            $raw = Read-RequestBody -Request $ctx.Request
+            $inputObject = $raw | ConvertFrom-Json
+            $result = Invoke-TikTokPublishStatus -PublishId ([string]$inputObject.publishId)
+            Send-Json -Context $ctx -StatusCode 200 -Object @{ ok = $true; result = $result }
             continue
         }
 

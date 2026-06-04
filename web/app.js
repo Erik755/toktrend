@@ -1,5 +1,5 @@
 const storageKey = "toktrend-state-v2";
-const appVersion = "2026.06.04-6";
+const appVersion = "2026.06.04-7";
 
 const trends = [
   {
@@ -115,15 +115,14 @@ function $(selector) {
 
 function apiBase() {
   if (window.TOKTREND_API_BASE) return String(window.TOKTREND_API_BASE).replace(/\/$/, "");
-  // Solo usar backend local cuando se corre desde archivo o localhost.
-  // En GitHub Pages u otro host remoto no hay backend disponible → null.
+  // GitHub Pages usa el backend local para OAuth y publicacion sin exponer secretos.
   if (location.protocol === "file:") return "http://127.0.0.1:8789";
   if (["127.0.0.1", "localhost", ""].includes(location.hostname)) return "";
-  return null; // modo solo-web: sin backend externo
+  return "http://127.0.0.1:8789";
 }
 
 function hasBackend() {
-  return apiBase() !== null;
+  return Boolean(apiBase());
 }
 
 function formatPeriod(minutes) {
@@ -145,7 +144,6 @@ function latestLearningText() {
 
 async function postJson(path, body) {
   const base = apiBase();
-  if (base === null) throw new Error("Sin backend: generacion local activada.");
   const response = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -159,15 +157,6 @@ async function postJson(path, body) {
 }
 
 async function checkAiHealth() {
-  if (!hasBackend()) {
-    // Modo solo-web (GitHub Pages): sin backend, generacion completamente local
-    state.aiOnline = false;
-    state.aiProvider = "local";
-    state.connected = false;
-    saveState();
-    renderStatus();
-    return;
-  }
   try {
     const response = await fetch(`${apiBase()}/api/health`);
     const data = await response.json();
@@ -198,17 +187,13 @@ async function backendAvailable() {
 }
 
 async function connectTikTok() {
-  if (!hasBackend()) {
-    showToast("En GitHub Pages puedes crear y descargar videos. Para conectar TikTok usa la app local con el backend de TokTrend abierto.", "info");
-    return;
-  }
   showToast("Revisando conexion local con TikTok...", "info");
   if (!(await backendAvailable())) {
     showToast("No se encontro el servicio local de TokTrend para conectar TikTok. La creacion y descarga siguen disponibles.", "warning");
     return;
   }
   showToast("Abriendo autorizacion de TikTok...", "info");
-  location.href = `${apiBase()}/api/tiktok/oauth/start`;
+  location.href = `${apiBase()}/api/tiktok/oauth/start?return_to=${encodeURIComponent(location.href)}`;
 }
 
 function savePeriod() {
